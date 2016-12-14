@@ -1,0 +1,6 @@
+name = Signup Counter
+description = "Create blocks showing total attendees."
+core = 7.x
+package = Sharing
+
+dependencies[] = signup

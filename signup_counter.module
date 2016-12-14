@@ -1,0 +1,123 @@
+<?php
+/**
+ * Implementation of hook_theme().
+ */
+function signup_counter_theme($existing, $type, $theme, $path) {
+  return array(
+    'signup_counter' => array(
+      'arguments' => array('count' => 0),
+      'template' => 'signup_counter',
+    ),
+  );
+}
+
+/**
+ * Implementation of hook_node_insert().
+ */
+function signup_counter_node_insert($node) {
+  $signup_blocks = variable_get('signup_counter_blocks', array());
+  if (isset($node->signup_enabled) && $node->signup_enabled == 1 && isset($node->signup_counter_block_enabled) && $node->signup_counter_block_enabled == 1 && !in_array($node->nid, $signup_blocks)) {
+      $signup_blocks[] = $node->nid;
+  }
+  variable_set('signup_counter_blocks', $signup_blocks);
+}
+
+/**
+ * Implementation of hook_node_update().
+ */
+function signup_counter_node_update($node) {
+  $signup_blocks = variable_get('signup_counter_blocks', array());
+  if (isset($node->signup_enabled) && $node->signup_enabled == 1 && isset($node->signup_counter_block_enabled) && $node->signup_counter_block_enabled == 1 && !in_array($node->nid, $signup_blocks)) {
+    $signup_blocks[] = $node->nid;
+  }
+
+  if ((isset($node->signup_counter_block_enabled) && $node->signup_counter_block_enabled == 0 && in_array($node->nid, $signup_blocks)) || (isset($node->signup_enabled) && $node->signup_enabled == 0)) {
+      foreach ($signup_blocks as $key => $value) {
+      if ($value == $node->nid) {
+        unset($signup_blocks[$key]);
+        db_delete('block')
+        ->condition('module', 'signup_counter')
+        ->condition('delta', $node->nid)
+        ->execute();
+
+        break;
+      }
+    }
+  }
+
+  variable_set('signup_counter_blocks', $signup_blocks);
+}
+
+/**
+ * Implementation of hook_node_delete().
+ */
+function signup_counter_node_delete($node) {
+  $signup_blocks = variable_get('signup_counter_blocks', array());
+  foreach ($signup_blocks as $key => $value) {
+    if ($value == $node->nid) {
+      unset($signup_blocks[$key]);
+      db_delete('block')
+      ->condition('module', 'signup_counter')
+      ->condition('delta', $node->nid)
+      ->execute();
+      break;
+    }
+  }
+  variable_set('signup_counter_blocks', $signup_blocks);
+}
+
+/**
+ * Implementation of hook_form_alter().
+ */
+function signup_counter_form_alter(&$form, $form_state, $form_id) {
+  // if the signup form element is there then add our form element.
+  if (isset($form['signup']['signup_enabled'])) {
+    $default_value = 0;
+    if (isset($form['nid']['#value'])) {
+      $signup_blocks = variable_get('signup_counter_blocks', array());
+      if (in_array($form['nid']['#value'], $signup_blocks)) {
+        $default_value = 1;
+      }
+    }
+    $form['signup']['signup_counter_block_enabled'] = array(
+      '#type' => 'checkbox',
+      '#title' => t('Create a block that will show a count of attendees.'),
+      '#description' => t('If selected, a block will be created that shows the total number of attendees.'),
+      '#default_value' => $default_value,
+    );
+  }
+}
+
+/**
+ * Implements hook_block_info.
+ */
+function signup_counter_block_info() {
+  $block = array();
+  $signup_blocks = variable_get('signup_counter_blocks', array());
+    foreach ($signup_blocks as $nid) {
+      $node = node_load($nid);
+      $block[$nid] = array(
+        'info' => t('Signup Counter: ' . $node->title),
+      );
+    }
+
+  return $block;
+}
+
+
+/**
+ * Implements hook_block_view.
+ */
+function signup_counter_block_view($delta = '') {
+  $block = array(
+      'subject' => t('Total attendees'),
+      'content' => signup_counter_block_render($delta),
+    );
+  return $block;
+}
+
+// Render the block contents.
+function signup_counter_block_render($nid) {
+  $total = count(signup_get_signups($nid));
+  return theme('signup_counter', $total);
+}

@@ -1,0 +1,5 @@
+<?php
+  function signup_counter_uninstall() {
+    variable_del('signup_counter_blocks');
+    db_query("DELETE FROM {blocks} WHERE module = 'signup_counter'");
+  }
